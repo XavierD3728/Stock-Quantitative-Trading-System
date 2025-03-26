@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">添加量化策略</h5>
+                <form method="POST" action="{{ url_for('add_quant_strategy') }}">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="stock_code" class="form-label">选择股票</label>
+                                <select class="form-select" id="stock_code" name="stock_code" required>
+                                    <option value="">请选择股票</option>
+                                    {% for stock in stocks %}
+                                    <option value="{{ stock.code }}">{{ stock.code }} - {{ stock.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="ma_short" class="form-label">短期均线</label>
+                                <input type="number" class="form-control" id="ma_short" name="ma_short" value="5" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="ma_long" class="form-label">长期均线</label>
+                                <input type="number" class="form-control" id="ma_long" name="ma_long" value="20" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="momentum_days" class="form-label">动量天数</label>
+                                <input type="number" class="form-control" id="momentum_days" name="momentum_days" value="5" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="mb-3">
+                                <label for="position_size" class="form-label">交易数量</label>
+                                <input type="number" class="form-control" id="position_size" name="position_size" value="100" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">添加策略</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">策略表现</h5>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">总收益</h6>
+                                <h4 class="{{ 'text-danger' if total_profit > 0 else 'text-success' }}">
+                                    ¥{{ "%.2f"|format(total_profit) }}
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">活跃策略</h6>
+                                <h4>{{ active_strategies }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2">今日交易</h6>
+                                <h4>{{ today_trades }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="performance-chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">策略说明</h5>
+                <p>本量化策略基于以下规则：</p>
+                <ul>
+                    <li>结合均线和动量指标</li>
+                    <li>当短期均线上穿长期均线且动量为正时买入</li>
+                    <li>当短期均线下穿长期均线且动量为负时卖出</li>
+                    <li>每个交易日最多交易一次</li>
+                    <li>单次交易量固定</li>
+                </ul>
+                <p>注意事项：</p>
+                <ul>
+                    <li>建议使用不同的均线参数组合</li>
+                    <li>动量参数影响策略灵敏度</li>
+                    <li>合理设置交易数量控制风险</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">策略列表</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>当前持仓</th>
+                                <th>持仓成本</th>
+                                <th>现价</th>
+                                <th>总收益</th>
+                                <th>收益率</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if strategies %}
+                                {% for strategy in strategies %}
+                                <tr>
+                                    <td>{{ strategy.stock_code }}</td>
+                                    <td>{{ strategy.stock_name }}</td>
+                                    <td>{{ strategy.position }}</td>
+                                    <td>¥{{ "%.2f"|format(strategy.avg_price) }}</td>
+                                    <td>¥{{ "%.2f"|format(strategy.current_price) }}</td>
+                                    <td class="{{ 'text-danger' if strategy.total_profit > 0 else 'text-success' }}">
+                                        ¥{{ "%.2f"|format(strategy.total_profit) }}
+                                    </td>
+                                    <td class="{{ 'text-danger' if strategy.profit_rate > 0 else 'text-success' }}">
+                                        {{ "%.2f"|format(strategy.profit_rate) }}%
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if strategy.is_active else 'secondary' }}">
+                                            {{ '运行中' if strategy.is_active else '已停止' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('toggle_strategy', strategy_id=strategy.id) }}" 
+                                           class="btn btn-sm btn-{{ 'danger' if strategy.is_active else 'success' }}">
+                                            {{ '停止' if strategy.is_active else '启动' }}
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="9" class="text-center">暂无策略</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化性能图表
+    var performanceChart = echarts.init(document.getElementById('performance-chart'));
+    
+    // 准备数据
+    var strategies = {{ strategies|tojson|safe }};
+    var dates = {{ dates|tojson|safe }};
+    var profits = {{ profits|tojson|safe }};
+    
+    var option = {
+        title: {
+            text: '策略收益走势',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+                var result = params[0].axisValue + '<br/>';
+                params.forEach(function(param) {
+                    result += param.marker + param.seriesName + ': ¥' + param.value.toFixed(2) + '<br/>';
+                });
+                return result;
+            }
+        },
+        legend: {
+            data: strategies.map(s => s.stock_code + ' - ' + s.stock_name),
+            orient: 'horizontal',
+            bottom: 0
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            boundaryGap: false
+        },
+        yAxis: {
+            type: 'value',
+            name: '收益(¥)',
+            axisLabel: {
+                formatter: '{value}'
+            }
+        },
+        series: profits.map((profit, index) => ({
+            name: strategies[index].stock_code + ' - ' + strategies[index].stock_name,
+            type: 'line',
+            data: profit,
+            smooth: true,
+            showSymbol: false,
+            emphasis: {
+                focus: 'series'
+            }
+        }))
+    };
+    
+    performanceChart.setOption(option);
+    
+    // 响应式调整
+    window.addEventListener('resize', function() {
+        performanceChart.resize();
+    });
+    
+    // 添加样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .text-success {
+            color: #1ab394 !important;  /* 绿色 */
+        }
+        .text-danger {
+            color: #ff3333 !important;  /* 红色 */
+        }
+        .card.bg-light {
+            background-color: #f8f9fa;
+            border: none;
+        }
+        .card.bg-light .card-body {
+            padding: 1rem;
+            text-align: center;
+        }
+        .card.bg-light h6 {
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        .card.bg-light h4 {
+            margin-bottom: 0;
+            font-weight: 600;
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
+{% endblock %} 

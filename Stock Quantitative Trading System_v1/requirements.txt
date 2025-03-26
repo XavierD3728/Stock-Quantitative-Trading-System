@@ -1,0 +1,10 @@
+flask==2.0.1
+tushare==1.2.89
+pandas>=1.5.0
+numpy>=1.21.0
+requests==2.26.0
+python-dotenv==0.19.0
+SQLAlchemy==1.4.23
+Flask-SQLAlchemy==2.5.1
+Flask-Login==0.5.0
+Flask-WTF==0.15.1 

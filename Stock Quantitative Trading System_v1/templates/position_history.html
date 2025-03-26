@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">持仓历史</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="position-select">选择持仓</label>
+                        <select class="form-control" id="position-select">
+                            <option value="">请选择持仓</option>
+                            {% for position in positions %}
+                            <option value="{{ position.id }}">{{ position.stock.code }} - {{ position.stock.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mt-3">
+                        <button id="confirm-btn" class="btn btn-primary" disabled>查看收益曲线</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card position-info" style="display: none;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">持仓信息</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <h6>持仓数量</h6>
+                            <p id="position-quantity">--</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>平均成本</h6>
+                            <p id="position-avg-price">--</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>当前价格</h6>
+                            <p id="position-current-price">--</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>当前收益</h6>
+                            <p id="position-current-profit">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">收益曲线</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrapper" style="height: 400px;">
+                        <canvas id="profitChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">加载中...</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.position-info h6 {
+    margin-bottom: 0.5rem;
+    color: #666;
+}
+
+.position-info p {
+    margin-bottom: 0;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.chart-wrapper {
+    position: relative;
+    margin: auto;
+    width: 100%;
+}
+
+.btn-primary {
+    background-color: #1ab394;
+    border-color: #1ab394;
+}
+
+.btn-primary:hover {
+    background-color: #18a689;
+    border-color: #18a689;
+}
+
+.btn-primary:disabled {
+    background-color: #1ab394;
+    border-color: #1ab394;
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.text-success {
+    color: #1ab394 !important;
+}
+
+.text-danger {
+    color: #ff3333 !important;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 添加一个清晰的日志函数
+    function appLog(type, message, data = null) {
+        const prefix = '【持仓收益曲线】';
+        switch(type) {
+            case 'info':
+                console.log(prefix, message, data || '');
+                break;
+            case 'error':
+                console.error(prefix, message, data || '');
+                break;
+            case 'warn':
+                console.warn(prefix, message, data || '');
+                break;
+        }
+    }
+
+    // 声明全局变量
+    let positionSelect, confirmBtn, positionInfo, profitChart;
+    let isInitialized = false;
+    let isLoading = false;
+
+    // 格式化金额
+    function formatMoney(amount) {
+        return '¥' + parseFloat(amount).toFixed(2);
+    }
+
+    // 显示加载状态
+    function showLoading() {
+        isLoading = true;
+        document.getElementById('loading-overlay').style.display = 'flex';
+    }
+
+    // 隐藏加载状态
+    function hideLoading() {
+        isLoading = false;
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+
+    // 显示错误消息
+    function showError(message) {
+        hideLoading();
+        alert(message);
+    }
+
+    // 更新持仓信息
+    function updatePositionInfo(data) {
+        appLog('info', '开始更新持仓信息');
+        try {
+            const elements = {
+                quantity: document.getElementById('position-quantity'),
+                avgPrice: document.getElementById('position-avg-price'),
+                currentPrice: document.getElementById('position-current-price'),
+                profit: document.getElementById('position-current-profit')
+            };
+
+            // 检查所有必需的元素
+            Object.entries(elements).forEach(([key, element]) => {
+                if (!element) {
+                    throw new Error(`缺少${key}元素`);
+                }
+            });
+
+            elements.quantity.textContent = data.position;
+            elements.avgPrice.textContent = formatMoney(data.avg_price);
+            elements.currentPrice.textContent = formatMoney(data.current_price);
+            
+            const currentProfit = data.profits[data.profits.length - 1];
+            elements.profit.textContent = formatMoney(currentProfit);
+            elements.profit.className = currentProfit >= 0 ? 'text-success' : 'text-danger';
+            
+            positionInfo.style.display = 'block';
+            appLog('info', '持仓信息更新成功');
+        } catch (error) {
+            appLog('error', '更新持仓信息失败:', error);
+            showError('更新持仓信息失败');
+        }
+    }
+
+    // 更新图表
+    function updateChart(data) {
+        appLog('info', '开始更新图表');
+        try {
+            const ctx = document.getElementById('profitChart');
+            if (!ctx) {
+                throw new Error('找不到图表容器');
+            }
+
+            if (profitChart) {
+                appLog('info', '销毁现有图表');
+                profitChart.destroy();
+            }
+
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: '累计收益',
+                        data: data.profits,
+                        borderColor: '#1ab394',
+                        backgroundColor: 'rgba(26, 179, 148, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: `${data.stock_name} (${data.stock_code}) 30天收益曲线`,
+                            font: { size: 16 }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return '收益: ' + formatMoney(context.raw);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '日期'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '收益 (元)'
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatMoney(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            appLog('info', '创建新图表');
+            profitChart = new Chart(ctx, chartConfig);
+            appLog('info', '图表创建成功');
+        } catch (error) {
+            appLog('error', '更新图表失败:', error);
+            showError('更新图表失败');
+        }
+    }
+
+    // 加载持仓历史数据
+    async function loadPositionHistory(positionId) {
+        if (isLoading) return;
+        
+        appLog('info', '开始加载持仓历史数据', { positionId });
+        showLoading();
+        
+        try {
+            const url = `/api/position/${positionId}/history`;
+            appLog('info', '发送API请求', { url });
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'include',
+                mode: 'same-origin'
+            });
+            
+            appLog('info', 'API响应状态:', response.status);
+            
+            if (response.status === 401) {
+                appLog('error', '用户未登录或会话已过期');
+                sessionStorage.setItem('redirectUrl', window.location.pathname);
+                window.location.href = '/login';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP错误! 状态码: ${response.status}`);
+            }
+
+            const data = await response.json();
+            appLog('info', '收到数据:', data);
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            if (!data.dates || !data.profits || !data.stock_name || !data.stock_code) {
+                throw new Error('返回的数据不完整');
+            }
+            
+            updatePositionInfo(data);
+            updateChart(data);
+        } catch (error) {
+            appLog('error', '加载数据失败:', error);
+            showError(error.message || '加载数据失败，请稍后重试');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 检查会话状态
+    async function checkSession() {
+        appLog('info', '检查会话状态');
+        try {
+            const response = await fetch('/api/check-session', {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            if (!response.ok && response.status === 401) {
+                appLog('error', '会话已过期');
+                sessionStorage.setItem('redirectUrl', window.location.pathname);
+                window.location.href = '/login';
+                return false;
+            }
+
+            const data = await response.json();
+            appLog('info', '会话状态:', data);
+            return true;
+        } catch (error) {
+            appLog('error', '检查会话状态失败:', error);
+            return false;
+        }
+    }
+
+    // 初始化函数
+    async function initializePage() {
+        if (isInitialized) {
+            appLog('info', '页面已经初始化过，跳过重复初始化');
+            return;
+        }
+
+        appLog('info', '开始页面初始化');
+        
+        // 先检查会话状态
+        const sessionValid = await checkSession();
+        if (!sessionValid) {
+            appLog('error', '会话无效，停止初始化');
+            return;
+        }
+        
+        // 获取DOM元素
+        positionSelect = document.getElementById('position-select');
+        confirmBtn = document.getElementById('confirm-btn');
+        positionInfo = document.querySelector('.position-info');
+        
+        const elements = {
+            positionSelect: positionSelect ? '已找到' : '未找到',
+            confirmBtn: confirmBtn ? '已找到' : '未找到',
+            positionInfo: positionInfo ? '已找到' : '未找到'
+        };
+        appLog('info', '页面元素状态:', elements);
+
+        if (!positionSelect || !confirmBtn || !positionInfo) {
+            appLog('error', '关键页面元素缺失', elements);
+            showError('页面初始化失败');
+            return;
+        }
+
+        // 添加选择框变化事件监听
+        positionSelect.addEventListener('change', function() {
+            appLog('info', '持仓选择变化', this.value);
+            confirmBtn.disabled = !this.value;
+            if (!this.value) {
+                positionInfo.style.display = 'none';
+                if (profitChart) {
+                    profitChart.destroy();
+                    profitChart = null;
+                }
+            }
+        });
+
+        // 添加确认按钮点击事件监听
+        confirmBtn.onclick = function(e) {
+            e.preventDefault();
+            const positionId = positionSelect.value;
+            if (positionId) {
+                loadPositionHistory(positionId);
+            }
+        };
+
+        isInitialized = true;
+        appLog('info', '页面初始化完成');
+    }
+
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializePage);
+    } else {
+        initializePage();
+    }
+</script>
+{% endblock %} 
