@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center mt-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="card-title text-danger mb-4">出错了！</h3>
+                    <p class="card-text">{{ error }}</p>
+                    <div class="mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">返回首页</a>
+                        <button class="btn btn-secondary" onclick="history.back()">返回上一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-title {
+    font-weight: bold;
+}
+
+.btn {
+    margin: 0 10px;
+    padding: 8px 20px;
+}
+
+.btn-primary {
+    background-color: #1ab394;
+    border-color: #1ab394;
+}
+
+.btn-primary:hover {
+    background-color: #18a689;
+    border-color: #18a689;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+</style>
+{% endblock %}
+ 

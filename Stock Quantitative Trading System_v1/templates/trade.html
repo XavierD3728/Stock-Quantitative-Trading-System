@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">交易</h5>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="stock_code" class="form-label">选择股票</label>
+                        <select class="form-select" id="stock_code" name="stock_code" required>
+                            <option value="">请选择股票</option>
+                            {% for stock in stocks %}
+                            <option value="{{ stock.code }}" data-price="{{ "%.2f"|format(stock.last_price) }}">{{ stock.code }} - {{ stock.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="current_price" class="form-label">当前价格</label>
+                        <div class="input-group">
+                            <span class="input-group-text">¥</span>
+                            <input type="text" class="form-control" id="current_price" readonly value="">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">交易数量</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">交易类型</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="buy" value="buy" checked>
+                            <label class="form-check-label" for="buy">买入</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="type" id="sell" value="sell">
+                            <label class="form-check-label" for="sell">卖出</label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">确认交易</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">账户信息</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>可用资金</h6>
+                        <h3>¥{{ "%.2f"|format(balance) }}</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>持仓市值</h6>
+                        <h3>¥{{ "%.2f"|format(total_position_value) }}</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>总盈亏</h6>
+                        <h3 id="total-profit" class="{{ 'text-danger' if total_profit > 0 else 'text-success' }}">¥{{ "%.2f"|format(total_profit) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓明细</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>持仓数量</th>
+                                <th>成本价</th>
+                                <th>现价</th>
+                                <th>每股盈亏</th>
+                                <th>总盈亏</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if positions %}
+                                {% for position in positions %}
+                                <tr>
+                                    <td>{{ position.stock.code }}</td>
+                                    <td>{{ position.stock.name }}</td>
+                                    <td>{{ position.quantity }}</td>
+                                    <td>¥{{ "%.2f"|format(position.average_price) }}</td>
+                                    <td>¥{{ "%.2f"|format(position.stock.last_price) }}</td>
+                                    <td class="{{ 'text-danger' if position.stock.last_price - position.average_price > 0 else 'text-success' }}">
+                                        ¥{{ "%.2f"|format(position.stock.last_price - position.average_price) }}
+                                    </td>
+                                    <td class="{{ 'text-danger' if position.quantity * (position.stock.last_price - position.average_price) > 0 else 'text-success' }}">
+                                        ¥{{ "%.2f"|format(position.quantity * (position.stock.last_price - position.average_price)) }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center">暂无持仓</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">可交易股票</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>行业</th>
+                                <th>现价</th>
+                                <th>涨跌幅</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in stocks %}
+                            <tr>
+                                <td>{{ stock.code }}</td>
+                                <td>{{ stock.name }}</td>
+                                <td>{{ stock.industry }}</td>
+                                <td class="stock-price" data-code="{{ stock.code }}">¥{{ "%.2f"|format(stock.last_price) }}</td>
+                                <td class="stock-change" data-code="{{ stock.code }}">--</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary select-stock" data-code="{{ stock.code }}" data-name="{{ stock.name }}">
+                                        选择
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const stockSelect = document.getElementById('stock_code');
+    const currentPriceInput = document.getElementById('current_price');
+    const quantityInput = document.getElementById('quantity');
+    const tradeForm = document.querySelector('form');
+    
+    // 初始化所有股票的价格和涨跌幅
+    function initializeStockData() {
+        document.querySelectorAll('.stock-price').forEach(element => {
+            const code = element.dataset.code;
+            updateStockData(code);
+        });
+    }
+    
+    // 更新单个股票的价格和涨跌幅
+    function updateStockData(code) {
+        fetch(`/api/stock/${code}/price`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    const priceElement = document.querySelector(`.stock-price[data-code="${code}"]`);
+                    const changeElement = document.querySelector(`.stock-change[data-code="${code}"]`);
+                    
+                    if (priceElement && changeElement) {
+                        // 更新价格
+                        const newPrice = parseFloat(data.price).toFixed(2);
+                        priceElement.textContent = `¥${newPrice}`;
+                        
+                        // 更新涨跌幅
+                        const change = data.change;
+                        const changeText = change >= 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
+                        changeElement.textContent = changeText;
+                        changeElement.className = `stock-change ${change >= 0 ? 'text-danger' : 'text-success'}`;
+                        
+                        // 如果是当前选中的股票，更新交易表单中的价格
+                        if (stockSelect.value === code) {
+                            currentPriceInput.value = newPrice;
+                        }
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+    
+    // 页面加载时初始化数据
+    initializeStockData();
+    
+    // 每30秒更新一次数据
+    setInterval(initializeStockData, 30000);
+    
+    // 交易表单提交事件
+    tradeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch('/trade', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                return response.text().then(html => {
+                    document.documentElement.innerHTML = html;
+                });
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    
+    // 当选择股票时更新价格
+    stockSelect.addEventListener('change', function() {
+        const selectedStock = this.value;
+        if (selectedStock) {
+            updateStockData(selectedStock);
+        } else {
+            currentPriceInput.value = '';
+        }
+    });
+    
+    // 选择股票按钮点击事件
+    document.querySelectorAll('.select-stock').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const code = this.dataset.code;
+            
+            // 更新选择框的值
+            stockSelect.value = code;
+            
+            // 触发change事件以更新价格
+            stockSelect.dispatchEvent(new Event('change'));
+            
+            // 滚动到交易表单
+            stockSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+    
+    // 添加样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .text-success {
+            color: #1ab394 !important;  /* 绿色 */
+        }
+        .text-danger {
+            color: #ff3333 !important;  /* 红色 */
+        }
+        .stock-change {
+            font-weight: bold;
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
+{% endblock %} 

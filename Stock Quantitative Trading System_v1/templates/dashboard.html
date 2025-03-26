@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">账户概览</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>可用资金</h6>
+                        <h3>¥{{ "%.2f"|format(balance) }}</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>持仓市值</h6>
+                        <h3>¥{{ "%.2f"|format(total_position_value) }}</h3>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>总盈亏</h6>
+                        <h3 class="{{ profit_color }}">¥{{ "%.2f"|format(total_profit) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓分析</h5>
+                <div id="position-chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">最近交易</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票</th>
+                                <th>类型</th>
+                                <th>数量</th>
+                                <th>价格</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if recent_trades %}
+                                {% for trade in recent_trades %}
+                                <tr>
+                                    <td>{{ trade.stock.code }}</td>
+                                    <td>{{ trade.type }}</td>
+                                    <td>{{ trade.quantity }}</td>
+                                    <td>¥{{ "%.2f"|format(trade.price) }}</td>
+                                    <td>{{ trade.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">暂无交易记录</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓明细</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>持仓数量</th>
+                                <th>成本价</th>
+                                <th>现价</th>
+                                <th>每股盈亏</th>
+                                <th>总盈亏</th>
+                                <th>市值</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if positions %}
+                                {% for position in positions %}
+                                <tr>
+                                    <td>{{ position.code }}</td>
+                                    <td>{{ position.name }}</td>
+                                    <td>{{ position.quantity }}</td>
+                                    <td>¥{{ "%.2f"|format(position.average_price) }}</td>
+                                    <td>¥{{ "%.2f"|format(position.current_price) }}</td>
+                                    <td class="{{ 'text-danger' if position.current_price > position.average_price else 'text-success' }}">
+                                        ¥{{ "%.2f"|format(position.current_price - position.average_price) }}
+                                    </td>
+                                    <td class="{{ position.profit_color }}">
+                                        ¥{{ "%.2f"|format(position.profit) }}
+                                    </td>
+                                    <td>¥{{ "%.2f"|format(position.market_value) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center">暂无持仓</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="text/javascript">
+    /* 初始化持仓分析图表 */
+    var positionChart = echarts.init(document.getElementById('position-chart'));
+    
+    /* 准备数据 */
+    var positionData = [
+        {% if positions %}
+            {% for position in positions %}
+            {
+                name: "{{ position.name }}",
+                value: {{ position.market_value }}
+            },
+            {% endfor %}
+        {% else %}
+            {
+                name: "暂无持仓",
+                value: 0
+            }
+        {% endif %}
+    ];
+    
+    var option = {
+        title: {
+            text: "持仓分布",
+            left: "center"
+        },
+        tooltip: {
+            trigger: "item",
+            formatter: "{a} <br/>{b}: ¥{c} ({d}%)"
+        },
+        legend: {
+            orient: "vertical",
+            left: "left"
+        },
+        series: [
+            {
+                name: "持仓市值",
+                type: "pie",
+                radius: "50%",
+                data: positionData,
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: "rgba(0, 0, 0, 0.5)"
+                    }
+                }
+            }
+        ]
+    };
+    
+    positionChart.setOption(option);
+    
+    /* 响应式调整 */
+    window.addEventListener("resize", function() {
+        positionChart.resize();
+    });
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 定期更新账户信息
+    function updateAccountInfo() {
+        fetch('/api/positions/update')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    // 更新可用资金
+                    document.querySelector('.col-md-4:nth-child(1) h3').textContent = `¥${data.balance.toFixed(2)}`;
+                    // 更新持仓市值
+                    document.querySelector('.col-md-4:nth-child(2) h3').textContent = `¥${data.total_position_value.toFixed(2)}`;
+                    // 更新总盈亏
+                    const totalProfitElement = document.querySelector('.col-md-4:nth-child(3) h3');
+                    totalProfitElement.textContent = `¥${data.total_profit.toFixed(2)}`;
+                    totalProfitElement.className = data.profit_color;
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    // 每15秒更新一次账户信息
+    setInterval(updateAccountInfo, 15000);
+
+    // 页面加载时立即更新一次
+    updateAccountInfo();
+});
+</script>
+{% endblock %} 

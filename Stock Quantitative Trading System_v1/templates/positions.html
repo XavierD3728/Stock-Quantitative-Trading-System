@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓概览</h5>
+                <div class="row">
+                    <div class="col-md-3">
+                        <h6>持仓市值</h6>
+                        <h3>¥{{ "%.2f"|format(total_position_value) }}</h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>总盈亏</h6>
+                        <h3 class="{{ 'text-danger' if total_profit > 0 else 'text-success' }}">
+                            ¥{{ "%.2f"|format(total_profit) }}
+                        </h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>收益率</h6>
+                        <h3 class="{{ 'text-danger' if total_profit > 0 else 'text-success' }}">
+                            {% if total_position_value > 0 %}
+                                {{ "%.2f"|format(total_profit / (total_position_value - total_profit) * 100) }}%
+                            {% else %}
+                                0.00%
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>可用资金</h6>
+                        <h3>¥{{ "%.2f"|format(balance) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓明细</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>股票代码</th>
+                                <th>股票名称</th>
+                                <th>持仓数量</th>
+                                <th>成本价</th>
+                                <th>现价</th>
+                                <th>市值</th>
+                                <th>盈亏</th>
+                                <th>收益率</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if positions %}
+                                {% for position in positions %}
+                                <tr>
+                                    <td>{{ position.stock.code }}</td>
+                                    <td>{{ position.stock.name }}</td>
+                                    <td>{{ position.quantity }}</td>
+                                    <td>¥{{ "%.2f"|format(position.average_price) }}</td>
+                                    <td>¥{{ "%.2f"|format(position.stock.last_price) }}</td>
+                                    <td>¥{{ "%.2f"|format(position.quantity * position.stock.last_price) }}</td>
+                                    <td class="{{ 'text-danger' if position.quantity * (position.stock.last_price - position.average_price) > 0 else 'text-success' }}">
+                                        ¥{{ "%.2f"|format(position.quantity * (position.stock.last_price - position.average_price)) }}
+                                    </td>
+                                    <td class="{{ 'text-danger' if (position.stock.last_price - position.average_price) / position.average_price > 0 else 'text-success' }}">
+                                        {{ "%.2f"|format((position.stock.last_price - position.average_price) / position.average_price * 100) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center">暂无持仓</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓分布</h5>
+                <div id="position-chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">账户概览</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>总资产</h6>
+                        <h3>¥{{ "%.2f"|format(balance + total_position_value) }}</h3>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>可用资金</h6>
+                        <h3>¥{{ "%.2f"|format(balance) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 初始化持仓分布图表
+    var positionChart = echarts.init(document.getElementById('position-chart'));
+    
+    // 准备数据
+    var positionData = [
+        {% for position in positions %}
+        {
+            name: '{{ position.stock.name }}',
+            value: {{ position.quantity * position.stock.last_price }}
+        },
+        {% endfor %}
+    ];
+    
+    var option = {
+        title: {
+            text: '持仓分布',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left'
+        },
+        series: [
+            {
+                name: '持仓市值',
+                type: 'pie',
+                radius: '50%',
+                data: positionData,
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        ]
+    };
+    
+    positionChart.setOption(option);
+    
+    // 响应式调整
+    window.addEventListener('resize', function() {
+        positionChart.resize();
+    });
+</script>
+
+{% block scripts %}
+<script>
+function updatePositions() {
+    fetch('/api/positions/update')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.error) {
+                // 更新持仓明细
+                const tbody = document.querySelector('table tbody');
+                if (tbody) {
+                    const rows = tbody.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const code = row.cells[0].textContent;
+                        fetch(`/api/stock/${code}/price`)
+                            .then(response => response.json())
+                            .then(stockData => {
+                                const quantity = parseFloat(row.cells[2].textContent);
+                                const costPrice = parseFloat(row.cells[3].textContent.replace('¥', ''));
+                                const currentPrice = stockData.price;
+                                
+                                // 更新现价
+                                row.cells[4].textContent = '¥' + currentPrice.toFixed(2);
+                                
+                                // 更新市值
+                                const marketValue = quantity * currentPrice;
+                                row.cells[5].textContent = '¥' + marketValue.toFixed(2);
+                                
+                                // 更新盈亏
+                                const profit = quantity * (currentPrice - costPrice);
+                                row.cells[6].textContent = '¥' + profit.toFixed(2);
+                                row.cells[6].className = profit > 0 ? 'text-danger' : 'text-success';
+                                
+                                // 更新收益率
+                                const profitRate = ((currentPrice - costPrice) / costPrice * 100).toFixed(2);
+                                row.cells[7].textContent = profitRate + '%';
+                                row.cells[7].className = profitRate > 0 ? 'text-danger' : 'text-success';
+                            });
+                    });
+                }
+            }
+        })
+        .catch(error => console.error('Error updating positions:', error));
+}
+
+// 每30秒更新一次持仓信息
+setInterval(updatePositions, 30000);
+
+// 页面加载时立即更新一次
+document.addEventListener('DOMContentLoaded', updatePositions);
+
+// 添加样式
+const style = document.createElement('style');
+style.textContent = `
+    .text-success {
+        color: #1ab394 !important;  /* 绿色 */
+    }
+    .text-danger {
+        color: #ff3333 !important;  /* 红色 */
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
+{% endblock %} 

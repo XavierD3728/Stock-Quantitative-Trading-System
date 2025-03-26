@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 text-center mb-5">
+        <h1>欢迎使用股票交易系统</h1>
+        <p class="lead">一个便捷高效的股票交易平台</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">实时行情</h5>
+                <p class="card-text">查看A股实时行情，掌握市场动态</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">交易功能</h5>
+                <p class="card-text">支持买入卖出，实现便捷交易</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">持仓管理</h5>
+                <p class="card-text">查看持仓情况，管理投资组合</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">市场概览</h5>
+                <div id="market-overview" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 初始化市场概览图表
+    var marketChart = echarts.init(document.getElementById('market-overview'));
+    
+    // 模拟数据
+    var option = {
+        title: {
+            text: '上证指数走势'
+        },
+        tooltip: {
+            trigger: 'axis'
+        },
+        xAxis: {
+            type: 'category',
+            data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        },
+        yAxis: {
+            type: 'value'
+        },
+        series: [{
+            data: [820, 932, 901, 934, 1290, 1330, 1320],
+            type: 'line',
+            smooth: true
+        }]
+    };
+    
+    marketChart.setOption(option);
+    
+    // 响应式调整
+    window.addEventListener('resize', function() {
+        marketChart.resize();
+    });
+</script>
+{% endblock %} 
